@@ -403,10 +403,10 @@ class WasteManagementAPITester:
             data=ward_data
         )
         
-        if not success or 'id' not in response:
+        if not success or ('id' not in response and '_id' not in response):
             return False
             
-        ward_id = response['id']
+        ward_id = response.get('id') or response.get('_id')
         
         # Update ward
         update_data = {"name": "Updated Ward CRUD", "address": "Updated CRUD Address"}
