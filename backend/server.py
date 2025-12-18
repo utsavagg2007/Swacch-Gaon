@@ -967,6 +967,24 @@ async def retell_evening_payload(date: Optional[str] = None, p=Depends(get_curre
     return {"plan_date": plan_date, "drivers": payloads}
 
 
+def _validate_hhmm(value: str) -> bool:
+    return bool(re.match(r"^([01]\d|2[0-3]):[0-5]\d$", value or ""))
+
+
+async def _get_retell_setup(panchayat_id: str) -> Optional[dict]:
+    return await db.retell_settings.find_one({"panchayat_id": panchayat_id}, {"_id": 0})
+
+
+def _webhook_url() -> str:
+    # We rely on externally reachable base URL (set via env in production)
+    base = os.environ.get("PUBLIC_BACKEND_URL")
+    if not base:
+        raise HTTPException(status_code=500, detail="PUBLIC_BACKEND_URL not configured")
+    return f"{base}/api/retell/webhook/call-event"
+
+
+
+
 @api_router.post("/retell/webhook/evening-report", tags=["retell"])
 async def retell_evening_webhook(payload: RetellEveningWebhookIn):
     # This endpoint is intentionally unauthenticated to allow Retell webhook calls.
