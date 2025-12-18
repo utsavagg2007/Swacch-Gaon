@@ -62,6 +62,9 @@ export default function Dashboard() {
   const [waste, setWaste] = useState("");
 
   const [schedule, setSchedule] = useState({ morning_call_time_ist: "06:00", evening_call_time_ist: "19:00" });
+  const [retellSetup, setRetellSetup] = useState({ morning_agent_id: "", evening_agent_id: "", from_number: "" });
+  const [busyRetell, setBusyRetell] = useState(false);
+  const [busyCalls, setBusyCalls] = useState(false);
 
   const [busyLog, setBusyLog] = useState(false);
   const [busyOpt, setBusyOpt] = useState(false);
@@ -71,18 +74,24 @@ export default function Dashboard() {
   const refreshAll = async () => {
     setError("");
     try {
-      const [wRes, vRes, lRes, sRes, rRes] = await Promise.all([
+      const [wRes, vRes, lRes, sRes, rRes, retellRes] = await Promise.all([
         api.get("/wards"),
         api.get("/vehicles"),
         api.get("/logs?limit=200"),
         api.get("/settings/call-schedule"),
         api.get("/routes"),
+        api.get("/retell/setup").catch(() => ({ data: { morning_agent_id: "", evening_agent_id: "", from_number: "" } })),
       ]);
       setWards(wRes.data);
       setVehicles(vRes.data);
       setLogs(lRes.data);
       setSchedule(sRes.data);
       setRoutes(rRes.data);
+      setRetellSetup({
+        morning_agent_id: retellRes.data.morning_agent_id || "",
+        evening_agent_id: retellRes.data.evening_agent_id || "",
+        from_number: retellRes.data.from_number || "",
+      });
     } catch (err) {
       setError(err?.response?.data?.detail || "Failed to load dashboard data");
     }
@@ -121,6 +130,41 @@ export default function Dashboard() {
       setError(err?.response?.data?.detail || "Could not save schedule");
     } finally {
       setBusySchedule(false);
+    }
+  };
+
+  const onSaveRetell = async () => {
+    setBusyRetell(true);
+    setError("");
+    try {
+      const payload = {
+        morning_agent_id: retellSetup.morning_agent_id,
+        evening_agent_id: retellSetup.evening_agent_id,
+        from_number: retellSetup.from_number ? retellSetup.from_number : null,
+      };
+      const res = await api.put("/retell/setup", payload);
+      setRetellSetup({
+        morning_agent_id: res.data.morning_agent_id || "",
+        evening_agent_id: res.data.evening_agent_id || "",
+        from_number: res.data.from_number || "",
+      });
+    } catch (err) {
+      setError(err?.response?.data?.detail || "Could not save Retell setup");
+    } finally {
+      setBusyRetell(false);
+    }
+  };
+
+  const onRunCallsNow = async (type) => {
+    setBusyCalls(true);
+    setError("");
+    try {
+      const path = type === "morning" ? "/retell/calls/morning/run" : "/retell/calls/evening/run";
+      await api.post(path);
+    } catch (err) {
+      setError(err?.response?.data?.detail || "Could not start calls");
+    } finally {
+      setBusyCalls(false);
     }
   };
 

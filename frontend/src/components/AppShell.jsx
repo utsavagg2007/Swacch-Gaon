@@ -114,7 +114,7 @@ export default function AppShell({ variant = "public", children }) {
 
       <footer className="border-t border-white/10 bg-black/20">
         <div className="mx-auto max-w-6xl px-4 py-6 text-xs text-zinc-300/70">
-          <div data-testid="footer-text">MVP build — Retell endpoints ready, calls not yet automated.</div>
+          <div data-testid="footer-text">Swachh Gaon — Retell calling is enabled once you configure Agent IDs.</div>
         </div>
       </footer>
     </div>
