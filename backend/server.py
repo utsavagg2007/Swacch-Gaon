@@ -22,8 +22,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
 
 # Scheduling + Retell
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from retell_client import create_phone_call, RetellError
 
@@ -1052,7 +1051,7 @@ async def retell_run_morning_calls(p=Depends(get_current_panchayat)):
 
 
 # --- Scheduler bootstrap ---
-_scheduler = BackgroundScheduler(timezone="Asia/Kolkata")
+_scheduler = AsyncIOScheduler(timezone="Asia/Kolkata")
 
 
 async def _run_calls_for_all_panchayats(call_type: str):
@@ -1143,7 +1142,7 @@ def _schedule_jobs():
                 except Exception:
                     continue
 
-    _scheduler.add_job(lambda: anyio.run(_tick), trigger="interval", minutes=1, id="tick", replace_existing=True)
+    _scheduler.add_job(_tick, trigger="interval", minutes=1, id="tick", replace_existing=True)
 
 
 @app.on_event("startup")
