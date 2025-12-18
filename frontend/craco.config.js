@@ -43,11 +43,7 @@ const webpackConfig = {
       },
     },
   },
-  style: {
-    postcss: {
-      plugins: [require("tailwindcss"), require("autoprefixer")],
-    },
-  },
+  // PostCSS config is loaded from postcss.config.js
   webpack: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
