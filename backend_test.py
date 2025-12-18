@@ -387,6 +387,305 @@ class WasteManagementAPITester:
         
         return success
 
+    def test_route_allocation_bug_fix(self):
+        """Test the route allocation bug fix - ensures ALL vehicles get routes"""
+        if not self.token:
+            print("❌ Skipping route allocation test - no token")
+            return False
+            
+        print("\n🔧 Testing Route Allocation Bug Fix")
+        print("=" * 40)
+        
+        # First, create a scenario with more vehicles than wards to test edge case
+        print("📋 Setting up test scenario...")
+        
+        # Create 5 vehicles for comprehensive testing
+        vehicles_data = [
+            {"driver_name": "Driver Alpha", "driver_phone": "+919876543201", "vehicle_number": "TEST001", "capacity": 800},
+            {"driver_name": "Driver Beta", "driver_phone": "+919876543202", "vehicle_number": "TEST002", "capacity": 1000},
+            {"driver_name": "Driver Gamma", "driver_phone": "+919876543203", "vehicle_number": "TEST003", "capacity": 600},
+            {"driver_name": "Driver Delta", "driver_phone": "+919876543204", "vehicle_number": "TEST004", "capacity": 1200},
+            {"driver_name": "Driver Echo", "driver_phone": "+919876543205", "vehicle_number": "TEST005", "capacity": 900}
+        ]
+        
+        success, vehicles_response = self.run_test(
+            "Create Test Vehicles for Route Allocation",
+            "POST",
+            "vehicles/bulk",
+            200,
+            data=vehicles_data
+        )
+        
+        if not success:
+            print("❌ Failed to create test vehicles")
+            return False
+            
+        test_vehicle_ids = [v.get('id') or v.get('_id') for v in vehicles_response]
+        print(f"✅ Created {len(test_vehicle_ids)} test vehicles")
+        
+        # Create 3 wards (fewer than vehicles to test edge case)
+        wards_data = [
+            {"name": "Test Ward Alpha", "address": "Alpha Area, Test Village"},
+            {"name": "Test Ward Beta", "address": "Beta Area, Test Village"},
+            {"name": "Test Ward Gamma", "address": "Gamma Area, Test Village"}
+        ]
+        
+        success, wards_response = self.run_test(
+            "Create Test Wards for Route Allocation",
+            "POST",
+            "wards/bulk",
+            200,
+            data=wards_data
+        )
+        
+        if not success:
+            print("❌ Failed to create test wards")
+            return False
+            
+        test_ward_ids = [w.get('id') or w.get('_id') for w in wards_response]
+        print(f"✅ Created {len(test_ward_ids)} test wards")
+        
+        # Run optimization
+        print("\n🚀 Running optimization...")
+        success, opt_response = self.run_test(
+            "Run Route Allocation Optimization",
+            "POST",
+            "optimization/run",
+            200
+        )
+        
+        if not success:
+            print("❌ Optimization failed")
+            return False
+            
+        routes_created = opt_response.get('routes_created', 0)
+        print(f"✅ Optimization created {routes_created} routes")
+        
+        # Get all routes to analyze allocation
+        success, routes_response = self.run_test(
+            "Get Routes for Analysis",
+            "GET",
+            "routes",
+            200
+        )
+        
+        if not success:
+            print("❌ Failed to get routes")
+            return False
+            
+        routes = routes_response if isinstance(routes_response, list) else []
+        print(f"📊 Analyzing {len(routes)} routes...")
+        
+        # Analysis 1: Check if ALL vehicles have routes
+        vehicle_numbers_in_routes = set()
+        vehicles_with_wards = 0
+        vehicles_without_wards = 0
+        total_wards_assigned = 0
+        
+        for route in routes:
+            vehicle_num = route.get('vehicle_number')
+            if vehicle_num:
+                vehicle_numbers_in_routes.add(vehicle_num)
+                wards = route.get('wards', [])
+                if wards:
+                    vehicles_with_wards += 1
+                    total_wards_assigned += len(wards)
+                else:
+                    vehicles_without_wards += 1
+        
+        expected_vehicles = set([v['vehicle_number'] for v in vehicles_data])
+        
+        print(f"\n📈 Route Allocation Analysis:")
+        print(f"   Expected vehicles: {len(expected_vehicles)}")
+        print(f"   Vehicles with routes: {len(vehicle_numbers_in_routes)}")
+        print(f"   Vehicles with wards: {vehicles_with_wards}")
+        print(f"   Vehicles without wards: {vehicles_without_wards}")
+        print(f"   Total wards assigned: {total_wards_assigned}")
+        
+        # Test 1: ALL vehicles should have routes (bug fix verification)
+        all_vehicles_have_routes = expected_vehicles.issubset(vehicle_numbers_in_routes)
+        if all_vehicles_have_routes:
+            print("✅ SUCCESS: All vehicles have route assignments")
+        else:
+            missing_vehicles = expected_vehicles - vehicle_numbers_in_routes
+            print(f"❌ FAIL: Missing routes for vehicles: {missing_vehicles}")
+            return False
+        
+        # Test 2: When wards < vehicles, some vehicles should have 0 wards but still have route docs
+        if len(test_ward_ids) < len(test_vehicle_ids):
+            if vehicles_without_wards > 0:
+                print("✅ SUCCESS: Extra vehicles have route docs with 0 wards")
+            else:
+                print("❌ FAIL: Expected some vehicles to have 0 wards when vehicles > wards")
+                return False
+        
+        # Test 3: Each ward should be assigned to exactly one vehicle
+        ward_assignments = {}
+        for route in routes:
+            for ward in route.get('wards', []):
+                ward_id = ward.get('ward_id')
+                if ward_id:
+                    if ward_id in ward_assignments:
+                        print(f"❌ FAIL: Ward {ward_id} assigned to multiple vehicles")
+                        return False
+                    ward_assignments[ward_id] = route.get('vehicle_number')
+        
+        print(f"✅ SUCCESS: {len(ward_assignments)} wards uniquely assigned")
+        
+        # Test 4: Verify Retell payloads include ALL drivers
+        print("\n📞 Testing Retell payload completeness...")
+        
+        success, morning_payload = self.run_test(
+            "Retell Morning Payload - All Drivers",
+            "GET",
+            "retell/morning/payload",
+            200
+        )
+        
+        if success:
+            drivers_in_morning = morning_payload.get('drivers', [])
+            morning_vehicle_numbers = set([d.get('vehicle_number') for d in drivers_in_morning])
+            
+            if expected_vehicles.issubset(morning_vehicle_numbers):
+                print("✅ SUCCESS: Morning payload includes all drivers")
+            else:
+                missing_morning = expected_vehicles - morning_vehicle_numbers
+                print(f"❌ FAIL: Morning payload missing drivers: {missing_morning}")
+                return False
+        else:
+            print("❌ FAIL: Could not get morning payload")
+            return False
+        
+        success, evening_payload = self.run_test(
+            "Retell Evening Payload - All Drivers",
+            "GET",
+            "retell/evening/payload",
+            200
+        )
+        
+        if success:
+            drivers_in_evening = evening_payload.get('drivers', [])
+            evening_vehicle_numbers = set([d.get('vehicle_number') for d in drivers_in_evening])
+            
+            if expected_vehicles.issubset(evening_vehicle_numbers):
+                print("✅ SUCCESS: Evening payload includes all drivers")
+            else:
+                missing_evening = expected_vehicles - evening_vehicle_numbers
+                print(f"❌ FAIL: Evening payload missing drivers: {missing_evening}")
+                return False
+        else:
+            print("❌ FAIL: Could not get evening payload")
+            return False
+        
+        # Cleanup test data
+        print("\n🧹 Cleaning up test data...")
+        for vehicle_id in test_vehicle_ids:
+            self.run_test(f"Delete Test Vehicle {vehicle_id}", "DELETE", f"vehicles/{vehicle_id}", 200)
+        
+        for ward_id in test_ward_ids:
+            self.run_test(f"Delete Test Ward {ward_id}", "DELETE", f"wards/{ward_id}", 200)
+        
+        print("✅ Route allocation bug fix verification PASSED")
+        return True
+
+    def test_route_allocation_equal_scenario(self):
+        """Test route allocation when wards == vehicles"""
+        if not self.token:
+            print("❌ Skipping equal scenario test - no token")
+            return False
+            
+        print("\n⚖️ Testing Equal Wards/Vehicles Scenario")
+        print("=" * 40)
+        
+        # Create 3 vehicles and 3 wards
+        vehicles_data = [
+            {"driver_name": "Equal Driver 1", "driver_phone": "+919876543301", "vehicle_number": "EQ001", "capacity": 800},
+            {"driver_name": "Equal Driver 2", "driver_phone": "+919876543302", "vehicle_number": "EQ002", "capacity": 900},
+            {"driver_name": "Equal Driver 3", "driver_phone": "+919876543303", "vehicle_number": "EQ003", "capacity": 1000}
+        ]
+        
+        wards_data = [
+            {"name": "Equal Ward 1", "address": "Equal Area 1, Test Village"},
+            {"name": "Equal Ward 2", "address": "Equal Area 2, Test Village"},
+            {"name": "Equal Ward 3", "address": "Equal Area 3, Test Village"}
+        ]
+        
+        # Create vehicles
+        success, vehicles_response = self.run_test(
+            "Create Equal Test Vehicles",
+            "POST",
+            "vehicles/bulk",
+            200,
+            data=vehicles_data
+        )
+        
+        if not success:
+            return False
+            
+        # Create wards
+        success, wards_response = self.run_test(
+            "Create Equal Test Wards",
+            "POST",
+            "wards/bulk",
+            200,
+            data=wards_data
+        )
+        
+        if not success:
+            return False
+            
+        # Run optimization
+        success, opt_response = self.run_test(
+            "Run Equal Scenario Optimization",
+            "POST",
+            "optimization/run",
+            200
+        )
+        
+        if not success:
+            return False
+            
+        # Get routes
+        success, routes_response = self.run_test(
+            "Get Equal Scenario Routes",
+            "GET",
+            "routes",
+            200
+        )
+        
+        if not success:
+            return False
+            
+        routes = routes_response if isinstance(routes_response, list) else []
+        
+        # Verify each vehicle has at least 1 ward
+        vehicles_with_wards = 0
+        for route in routes:
+            vehicle_num = route.get('vehicle_number')
+            if vehicle_num and vehicle_num.startswith('EQ'):
+                wards = route.get('wards', [])
+                if wards:
+                    vehicles_with_wards += 1
+                    print(f"   Vehicle {vehicle_num}: {len(wards)} wards")
+        
+        if vehicles_with_wards == 3:
+            print("✅ SUCCESS: All vehicles have at least 1 ward in equal scenario")
+            result = True
+        else:
+            print(f"❌ FAIL: Only {vehicles_with_wards}/3 vehicles have wards")
+            result = False
+        
+        # Cleanup
+        for v in vehicles_response:
+            vehicle_id = v.get('id') or v.get('_id')
+            self.run_test(f"Delete Equal Vehicle {vehicle_id}", "DELETE", f"vehicles/{vehicle_id}", 200)
+        
+        for w in wards_response:
+            ward_id = w.get('id') or w.get('_id')
+            self.run_test(f"Delete Equal Ward {ward_id}", "DELETE", f"wards/{ward_id}", 200)
+        
+        return result
+
     def test_ward_crud(self):
         """Test individual ward CRUD operations"""
         if not self.token:
