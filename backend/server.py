@@ -965,6 +965,210 @@ async def retell_evening_payload(date: Optional[str] = None, p=Depends(get_curre
             }
         )
     return {"plan_date": plan_date, "drivers": payloads}
+@api_router.get(
+    "/retell/setup",
+    response_model=RetellSetupOut,
+    response_model_by_alias=False,
+    tags=["retell"],
+)
+async def retell_get_setup(p=Depends(get_current_panchayat)):
+    doc = await db.retell_settings.find_one({"panchayat_id": p["_id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Retell not configured")
+    return RetellSetupOut(**doc)
+
+
+@api_router.put(
+    "/retell/setup",
+    response_model=RetellSetupOut,
+    response_model_by_alias=False,
+    tags=["retell"],
+)
+async def retell_set_setup(payload: RetellSetupIn, p=Depends(get_current_panchayat)):
+    # Basic validation of optional from_number
+    if payload.from_number and not payload.from_number.startswith("+"):
+        raise HTTPException(status_code=400, detail="from_number must be E.164 like +91...")
+
+    doc = {
+        "panchayat_id": p["_id"],
+        "morning_agent_id": payload.morning_agent_id.strip(),
+        "evening_agent_id": payload.evening_agent_id.strip(),
+        "from_number": payload.from_number.strip() if payload.from_number else None,
+        "updated_at": _iso(_now_utc()),
+    }
+    await db.retell_settings.update_one({"panchayat_id": p["_id"]}, {"$set": doc}, upsert=True)
+    return RetellSetupOut(**doc)
+
+
+@api_router.post(
+    "/retell/calls/morning/run",
+    response_model=RetellCallResultOut,
+    response_model_by_alias=False,
+    tags=["retell"],
+)
+async def retell_run_morning_calls(p=Depends(get_current_panchayat)):
+    setup = await _get_retell_setup(p["_id"])
+    if not setup:
+        raise HTTPException(status_code=400, detail="Retell setup missing. Configure agent IDs first.")
+
+    data = await retell_morning_payload(date=_date_ist().isoformat(), p=p)
+    drivers = data.get("drivers", [])
+
+    results = []
+    calls_started = 0
+    for d in drivers:
+        to_phone = d.get("to_phone")
+        if not to_phone:
+            results.append({"ok": False, "reason": "Missing driver phone", "driver": d})
+            continue
+
+        meta = {
+            "type": "morning_route",
+            "panchayat_id": p["_id"],
+            "panchayat_name": p.get("name"),
+            "plan_date": d.get("plan_date"),
+            "vehicle_number": d.get("vehicle_number"),
+            "driver_phone": to_phone,
+            "round_trips": d.get("round_trips"),
+            "route_text": d.get("route"),
+        }
+
+        try:
+            resp = await _to_thread(
+                create_phone_call,
+                agent_id=setup["morning_agent_id"],
+                to_number=to_phone,
+                from_number=setup.get("from_number"),
+                webhook_url=_webhook_url(),
+                metadata=meta,
+                data_retention="everything_except_pii",
+            )
+            calls_started += 1
+            results.append({"ok": True, "retell": resp, "driver": d})
+        except RetellError as e:
+            results.append({"ok": False, "reason": str(e), "driver": d})
+
+    return RetellCallResultOut(ok=True, calls_started=calls_started, results=results)
+
+
+@api_router.post(
+    "/retell/calls/evening/run",
+    response_model=RetellCallResultOut,
+    response_model_by_alias=False,
+    tags=["retell"],
+)
+async def retell_run_evening_calls(p=Depends(get_current_panchayat)):
+    setup = await _get_retell_setup(p["_id"])
+    if not setup:
+        raise HTTPException(status_code=400, detail="Retell setup missing. Configure agent IDs first.")
+
+    data = await retell_evening_payload(date=_date_ist().isoformat(), p=p)
+    drivers = data.get("drivers", [])
+
+    results = []
+    calls_started = 0
+    for d in drivers:
+        to_phone = d.get("to_phone")
+        if not to_phone:
+            results.append({"ok": False, "reason": "Missing driver phone", "driver": d})
+            continue
+
+        meta = {
+            "type": "evening_logs",
+            "panchayat_id": p["_id"],
+            "panchayat_name": p.get("name"),
+            "date": d.get("plan_date"),
+            "vehicle_number": d.get("vehicle_number"),
+            "driver_phone": to_phone,
+            "wards_expected": d.get("wards_expected"),
+        }
+
+        try:
+            resp = await _to_thread(
+                create_phone_call,
+                agent_id=setup["evening_agent_id"],
+                to_number=to_phone,
+                from_number=setup.get("from_number"),
+                webhook_url=_webhook_url(),
+                metadata=meta,
+                data_retention="everything_except_pii",
+            )
+            calls_started += 1
+            results.append({"ok": True, "retell": resp, "driver": d})
+        except RetellError as e:
+            results.append({"ok": False, "reason": str(e), "driver": d})
+
+    return RetellCallResultOut(ok=True, calls_started=calls_started, results=results)
+
+
+class RetellCallEventIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    event: Optional[str] = None
+    call: Optional[Dict[str, Any]] = None
+    call_id: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+@api_router.post("/retell/webhook/call-event", tags=["retell"])
+async def retell_call_event_webhook(body: RetellCallEventIn):
+    """Generic webhook endpoint to receive Retell call events.
+
+    For MVP user chose to skip signature verification.
+
+    We:
+    - store raw events into MongoDB for debugging/audit
+    - if this is an evening call and we receive structured data, we convert to our existing
+      /retell/webhook/evening-report model and insert logs.
+
+    IMPORTANT: Retell can send various payload shapes depending on configuration.
+    We store raw payload always, and only parse if fields exist.
+    """
+
+    raw = body.model_dump()
+    await db.retell_events.insert_one({"_id": _uuid(), "received_at": _iso(_now_utc()), **raw})
+
+    meta = (body.metadata or {})
+    call = (body.call or {})
+
+    # If Retell sends these values as metadata, translate to our evening report endpoint
+    if meta.get("type") == "evening_logs":
+        vehicle_number = meta.get("vehicle_number")
+        driver_phone = meta.get("driver_phone")
+        date_str = meta.get("date")
+
+        # try to read from call analysis/custom fields
+        total = None
+        wards_visited = None
+
+        analysis = call.get("call_analysis") or {}
+        # Some setups store extracted values in analysis.custom_fields
+        custom = analysis.get("custom_fields") or analysis.get("custom") or {}
+
+        if isinstance(custom, dict):
+            total = custom.get("total_waste_collected") or custom.get("total_waste")
+            wards_visited = custom.get("wards_visited") or custom.get("wards")
+
+        # fallback: if Retell sent them directly on call
+        total = total or call.get("total_waste_collected")
+        wards_visited = wards_visited or call.get("wards_visited")
+
+        if vehicle_number and date_str and total and wards_visited:
+            payload = RetellEveningWebhookIn(
+                vehicle_number=str(vehicle_number),
+                driver_phone=str(driver_phone) if driver_phone else None,
+                date=str(date_str),
+                total_waste_collected=float(total),
+                wards_visited=[str(x) for x in (wards_visited or [])],
+                final=True,
+            )
+            # reuse existing logic
+            await retell_evening_webhook(payload)
+
+    return {"ok": True}
+
+
+
 
 
 def _validate_hhmm(value: str) -> bool:
