@@ -240,9 +240,10 @@ class WasteManagementAPITester:
             data=log_data
         )
         
-        if success and 'id' in response:
-            self.log_ids.append(response['id'])
-            print(f"   Created log with ID: {response['id']}")
+        if success and ('id' in response or '_id' in response):
+            log_id = response.get('id') or response.get('_id')
+            self.log_ids.append(log_id)
+            print(f"   Created log with ID: {log_id}")
             return True
         return False
 
