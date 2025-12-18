@@ -476,18 +476,33 @@ async def login(payload: AuthLoginIn):
     return AuthOut(token=create_access_token(p["_id"]))
 
 
-@api_router.get("/auth/me", response_model=PanchayatOut, tags=["auth"])
+@api_router.get(
+    "/auth/me",
+    response_model=PanchayatOut,
+    response_model_by_alias=False,
+    tags=["auth"],
+)
 async def me(p=Depends(get_current_panchayat)):
     return p
 
 
 # --- Panchayat ---
-@api_router.get("/panchayat", response_model=PanchayatOut, tags=["panchayat"])
+@api_router.get(
+    "/panchayat",
+    response_model=PanchayatOut,
+    response_model_by_alias=False,
+    tags=["panchayat"],
+)
 async def get_panchayat(p=Depends(get_current_panchayat)):
     return p
 
 
-@api_router.put("/panchayat", response_model=PanchayatOut, tags=["panchayat"])
+@api_router.put(
+    "/panchayat",
+    response_model=PanchayatOut,
+    response_model_by_alias=False,
+    tags=["panchayat"],
+)
 async def update_panchayat(payload: PanchayatUpdateIn, p=Depends(get_current_panchayat)):
     update: Dict[str, Any] = {}
     if payload.name is not None:
@@ -508,13 +523,23 @@ async def update_panchayat(payload: PanchayatUpdateIn, p=Depends(get_current_pan
 
 
 # --- Wards ---
-@api_router.get("/wards", response_model=List[WardOut], tags=["wards"])
+@api_router.get(
+    "/wards",
+    response_model=List[WardOut],
+    response_model_by_alias=False,
+    tags=["wards"],
+)
 async def list_wards(p=Depends(get_current_panchayat)):
     wards = await db.wards.find({"panchayat_id": p["_id"]}, {"_id": 1, "panchayat_id": 1, "name": 1, "address": 1, "lat": 1, "lon": 1}).to_list(10000)
     return wards
 
 
-@api_router.post("/wards", response_model=WardOut, tags=["wards"])
+@api_router.post(
+    "/wards",
+    response_model=WardOut,
+    response_model_by_alias=False,
+    tags=["wards"],
+)
 async def create_ward(payload: WardIn, p=Depends(get_current_panchayat)):
     coords = await geocode_address(payload.address)
     doc = {
@@ -530,7 +555,12 @@ async def create_ward(payload: WardIn, p=Depends(get_current_panchayat)):
     return doc
 
 
-@api_router.post("/wards/bulk", response_model=List[WardOut], tags=["wards"])
+@api_router.post(
+    "/wards/bulk",
+    response_model=List[WardOut],
+    response_model_by_alias=False,
+    tags=["wards"],
+)
 async def create_wards_bulk(payload: List[WardIn], p=Depends(get_current_panchayat)):
     docs = []
     for w in payload:
@@ -551,7 +581,12 @@ async def create_wards_bulk(payload: List[WardIn], p=Depends(get_current_panchay
     return docs
 
 
-@api_router.put("/wards/{ward_id}", response_model=WardOut, tags=["wards"])
+@api_router.put(
+    "/wards/{ward_id}",
+    response_model=WardOut,
+    response_model_by_alias=False,
+    tags=["wards"],
+)
 async def update_ward(ward_id: str, payload: WardIn, p=Depends(get_current_panchayat)):
     coords = await geocode_address(payload.address)
     update = {
@@ -576,13 +611,23 @@ async def delete_ward(ward_id: str, p=Depends(get_current_panchayat)):
 
 
 # --- Vehicles ---
-@api_router.get("/vehicles", response_model=List[VehicleOut], tags=["vehicles"])
+@api_router.get(
+    "/vehicles",
+    response_model=List[VehicleOut],
+    response_model_by_alias=False,
+    tags=["vehicles"],
+)
 async def list_vehicles(p=Depends(get_current_panchayat)):
     vehicles = await db.vehicles.find({"panchayat_id": p["_id"]}, {"_id": 1, "panchayat_id": 1, "driver_name": 1, "driver_phone": 1, "vehicle_number": 1, "capacity": 1}).to_list(10000)
     return vehicles
 
 
-@api_router.post("/vehicles", response_model=VehicleOut, tags=["vehicles"])
+@api_router.post(
+    "/vehicles",
+    response_model=VehicleOut,
+    response_model_by_alias=False,
+    tags=["vehicles"],
+)
 async def create_vehicle(payload: VehicleIn, p=Depends(get_current_panchayat)):
     doc = {
         "_id": _uuid(),
@@ -597,7 +642,12 @@ async def create_vehicle(payload: VehicleIn, p=Depends(get_current_panchayat)):
     return doc
 
 
-@api_router.post("/vehicles/bulk", response_model=List[VehicleOut], tags=["vehicles"])
+@api_router.post(
+    "/vehicles/bulk",
+    response_model=List[VehicleOut],
+    response_model_by_alias=False,
+    tags=["vehicles"],
+)
 async def create_vehicles_bulk(payload: List[VehicleIn], p=Depends(get_current_panchayat)):
     docs = []
     for v in payload:
@@ -617,7 +667,12 @@ async def create_vehicles_bulk(payload: List[VehicleIn], p=Depends(get_current_p
     return docs
 
 
-@api_router.put("/vehicles/{vehicle_id}", response_model=VehicleOut, tags=["vehicles"])
+@api_router.put(
+    "/vehicles/{vehicle_id}",
+    response_model=VehicleOut,
+    response_model_by_alias=False,
+    tags=["vehicles"],
+)
 async def update_vehicle(vehicle_id: str, payload: VehicleIn, p=Depends(get_current_panchayat)):
     update = {
         "driver_name": payload.driver_name.strip(),
@@ -640,7 +695,12 @@ async def delete_vehicle(vehicle_id: str, p=Depends(get_current_panchayat)):
 
 
 # --- Logs ---
-@api_router.get("/logs", response_model=List[LogOut], tags=["logs"])
+@api_router.get(
+    "/logs",
+    response_model=List[LogOut],
+    response_model_by_alias=False,
+    tags=["logs"],
+)
 async def list_logs(limit: int = 200, p=Depends(get_current_panchayat)):
     limit = min(max(limit, 1), 1000)
     logs = (
@@ -651,7 +711,12 @@ async def list_logs(limit: int = 200, p=Depends(get_current_panchayat)):
     return logs
 
 
-@api_router.post("/logs", response_model=LogOut, tags=["logs"])
+@api_router.post(
+    "/logs",
+    response_model=LogOut,
+    response_model_by_alias=False,
+    tags=["logs"],
+)
 async def create_log(payload: LogIn, p=Depends(get_current_panchayat)):
     ward = await db.wards.find_one({"_id": payload.ward_id, "panchayat_id": p["_id"]}, {"_id": 1})
     vehicle = await db.vehicles.find_one({"_id": payload.vehicle_id, "panchayat_id": p["_id"]}, {"_id": 1, "vehicle_number": 1})
@@ -703,7 +768,12 @@ async def set_call_schedule(payload: CallScheduleIn, p=Depends(get_current_panch
 
 
 # --- Optimization + Routes ---
-@api_router.post("/optimization/run", response_model=OptimizationRunOut, tags=["optimization"])
+@api_router.post(
+    "/optimization/run",
+    response_model=OptimizationRunOut,
+    response_model_by_alias=False,
+    tags=["optimization"],
+)
 async def run_optimization(p=Depends(get_current_panchayat)):
     # predict for next day IST
     tomorrow = _date_ist() + timedelta(days=1)
@@ -740,7 +810,12 @@ async def run_optimization(p=Depends(get_current_panchayat)):
     return OptimizationRunOut(plan_date=tomorrow.isoformat(), routes_created=len(route_docs))
 
 
-@api_router.get("/routes", response_model=List[RoutePlanOut], tags=["routes"])
+@api_router.get(
+    "/routes",
+    response_model=List[RoutePlanOut],
+    response_model_by_alias=False,
+    tags=["routes"],
+)
 async def list_routes(date: Optional[str] = None, p=Depends(get_current_panchayat)):
     plan_date = date or (_date_ist() + timedelta(days=1)).isoformat()
     routes = await db.routes.find({"panchayat_id": p["_id"], "plan_date": plan_date}).to_list(10000)
