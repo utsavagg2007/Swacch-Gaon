@@ -334,6 +334,80 @@ export default function Dashboard() {
                   </Button>
                 </CardContent>
               </Card>
+
+              <Card className="border-white/10 bg-white/5 text-zinc-50" data-testid="dashboard-retell-card">
+                <CardHeader>
+                  <CardTitle className="text-base" data-testid="dashboard-retell-title">Retell AI Setup</CardTitle>
+                  <CardDescription className="text-zinc-200/70">
+                    Add your Retell Agent IDs (Hindi). Calls will auto-run at your scheduled times.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-2">
+                    <Label data-testid="dashboard-retell-morning-agent-label">Morning agent ID</Label>
+                    <Input
+                      value={retellSetup.morning_agent_id}
+                      onChange={(e) => setRetellSetup((s) => ({ ...s, morning_agent_id: e.target.value }))}
+                      data-testid="dashboard-retell-morning-agent-input"
+                      className="border-white/15 bg-black/20 text-zinc-50"
+                      placeholder="agent_..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label data-testid="dashboard-retell-evening-agent-label">Evening agent ID</Label>
+                    <Input
+                      value={retellSetup.evening_agent_id}
+                      onChange={(e) => setRetellSetup((s) => ({ ...s, evening_agent_id: e.target.value }))}
+                      data-testid="dashboard-retell-evening-agent-input"
+                      className="border-white/15 bg-black/20 text-zinc-50"
+                      placeholder="agent_..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label data-testid="dashboard-retell-from-number-label">From number (optional, E.164)</Label>
+                    <Input
+                      value={retellSetup.from_number}
+                      onChange={(e) => setRetellSetup((s) => ({ ...s, from_number: e.target.value }))}
+                      data-testid="dashboard-retell-from-number-input"
+                      className="border-white/15 bg-black/20 text-zinc-50"
+                      placeholder="+91..."
+                    />
+                  </div>
+
+                  <Button
+                    onClick={onSaveRetell}
+                    disabled={busyRetell || !retellSetup.morning_agent_id || !retellSetup.evening_agent_id}
+                    data-testid="dashboard-retell-save-button"
+                    className="w-full rounded-full bg-white/10 text-zinc-50 ring-1 ring-white/10 hover:bg-white/15"
+                  >
+                    {busyRetell ? "Saving…" : "Save Retell setup"}
+                  </Button>
+
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <Button
+                      onClick={() => onRunCallsNow("morning")}
+                      disabled={busyCalls}
+                      data-testid="dashboard-retell-run-morning-button"
+                      className="rounded-full bg-emerald-400/20 text-emerald-100 ring-1 ring-emerald-200/25 hover:bg-emerald-400/25"
+                    >
+                      {busyCalls ? "Starting…" : "Test: Run morning calls now"}
+                    </Button>
+                    <Button
+                      onClick={() => onRunCallsNow("evening")}
+                      disabled={busyCalls}
+                      data-testid="dashboard-retell-run-evening-button"
+                      className="rounded-full bg-violet-400/15 text-violet-100 ring-1 ring-violet-200/20 hover:bg-violet-400/20"
+                    >
+                      {busyCalls ? "Starting…" : "Test: Run evening calls now"}
+                    </Button>
+                  </div>
+
+                  <div data-testid="dashboard-retell-hint" className="text-xs text-zinc-200/70">
+                    Requirement: backend must have PUBLIC_BACKEND_URL set so Retell can reach the webhook.
+                  </div>
+                </CardContent>
+              </Card>
+
             </div>
 
             <div className="lg:col-span-7 space-y-4">
