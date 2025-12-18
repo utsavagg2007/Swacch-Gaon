@@ -275,6 +275,28 @@ class RoutePlanOut(BaseModel):
 class RetellEveningWebhookIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
+
+
+class RetellSetupIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    morning_agent_id: str
+    evening_agent_id: str
+    from_number: Optional[str] = None  # optional outbound caller ID (E.164)
+
+
+class RetellSetupOut(BaseModel):
+    morning_agent_id: str
+    evening_agent_id: str
+    from_number: Optional[str] = None
+
+
+class RetellCallResultOut(BaseModel):
+    ok: bool
+    calls_started: int
+    results: List[Dict[str, Any]]
+
+
     vehicle_number: str
     driver_phone: Optional[str] = None
     date: str  # YYYY-MM-DD
