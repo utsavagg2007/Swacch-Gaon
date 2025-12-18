@@ -452,10 +452,10 @@ class WasteManagementAPITester:
             data=vehicle_data
         )
         
-        if not success or 'id' not in response:
+        if not success or ('id' not in response and '_id' not in response):
             return False
             
-        vehicle_id = response['id']
+        vehicle_id = response.get('id') or response.get('_id')
         
         # Update vehicle
         update_data = {
