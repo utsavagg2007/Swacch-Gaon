@@ -1,6 +1,6 @@
 // craco.config.js
 const path = require("path");
-const { POSTCSS_MODES } = require("@craco/craco");
+// POSTCSS_MODES not available in this CRACO version
 require("dotenv").config();
 
 // Check if we're in development/preview mode (not production build)
