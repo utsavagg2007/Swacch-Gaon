@@ -936,6 +936,27 @@ async def retell_evening_payload(date: Optional[str] = None, p=Depends(get_curre
         wards = r.get("wards", [])
         payloads.append(
             {
+
+class RetellSetupIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    morning_agent_id: str
+    evening_agent_id: str
+    from_number: Optional[str] = None  # optional outbound caller ID (E.164)
+
+
+class RetellSetupOut(BaseModel):
+    morning_agent_id: str
+    evening_agent_id: str
+    from_number: Optional[str] = None
+
+
+class RetellCallResultOut(BaseModel):
+    ok: bool
+    calls_started: int
+    results: List[Dict[str, Any]]
+
+
                 "to_phone": r.get("driver_phone"),
                 "vehicle_number": r.get("vehicle_number"),
                 "plan_date": plan_date,
