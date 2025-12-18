@@ -29,7 +29,7 @@ export default function AppShell({ variant = "public", children }) {
               <Leaf className="h-5 w-5 text-emerald-200" />
             </div>
             <div>
-              <div className="text-sm font-semibold tracking-wide">Rural Waste Optimizer</div>
+              <div className="text-sm font-semibold tracking-wide">Swachh Gaon</div>
               <div className="text-xs text-zinc-300/80">Routes • Calls • Logs</div>
             </div>
           </Link>

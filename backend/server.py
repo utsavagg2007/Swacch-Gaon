@@ -21,6 +21,13 @@ import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
 
+# Scheduling + Retell
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+
+from retell_client import create_phone_call, RetellError
+
+
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -893,7 +900,8 @@ async def list_routes(date: Optional[str] = None, p=Depends(get_current_panchaya
 # --- Retell-ready endpoints ---
 @api_router.get("/retell/morning/payload", tags=["retell"])
 async def retell_morning_payload(date: Optional[str] = None, p=Depends(get_current_panchayat)):
-    plan_date = date or (_date_ist() + timedelta(days=1)).isoformat()
+    # Morning calls are for *today* (routes should have been generated after yesterday evening logs)
+    plan_date = date or _date_ist().isoformat()
     routes = await db.routes.find({"panchayat_id": p["_id"], "plan_date": plan_date}).to_list(10000)
     if not routes:
         raise HTTPException(status_code=404, detail="No routes found for date")
@@ -917,7 +925,8 @@ async def retell_morning_payload(date: Optional[str] = None, p=Depends(get_curre
 
 @api_router.get("/retell/evening/payload", tags=["retell"])
 async def retell_evening_payload(date: Optional[str] = None, p=Depends(get_current_panchayat)):
-    plan_date = date or (_date_ist() + timedelta(days=1)).isoformat()
+    # Evening calls collect logs for *today*
+    plan_date = date or _date_ist().isoformat()
     routes = await db.routes.find({"panchayat_id": p["_id"], "plan_date": plan_date}).to_list(10000)
     if not routes:
         raise HTTPException(status_code=404, detail="No routes found for date")

@@ -15,7 +15,7 @@ export default function Home() {
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-12 lg:items-center">
           <div className="lg:col-span-7">
             <Badge data-testid="home-badge" className="bg-white/10 text-zinc-100 ring-1 ring-white/10">
-              Panchayat Operations • Next-day Planning
+              Swachh Gaon • Panchayat Operations
             </Badge>
             <h1
               data-testid="home-hero-title"
