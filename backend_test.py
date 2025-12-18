@@ -809,6 +809,8 @@ def main():
         ("Retell Webhook", tester.test_retell_webhook),
         ("Ward CRUD", tester.test_ward_crud),
         ("Vehicle CRUD", tester.test_vehicle_crud),
+        ("Route Allocation Bug Fix", tester.test_route_allocation_bug_fix),
+        ("Equal Scenario Route Allocation", tester.test_route_allocation_equal_scenario),
     ]
     
     failed_tests = []
