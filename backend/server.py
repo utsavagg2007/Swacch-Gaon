@@ -1008,6 +1008,109 @@ async def retell_set_setup(payload: RetellSetupIn, p=Depends(get_current_panchay
 )
 async def retell_run_morning_calls(p=Depends(get_current_panchayat)):
     setup = await _get_retell_setup(p["_id"])
+
+
+# --- Scheduler bootstrap ---
+_scheduler = BackgroundScheduler(timezone="Asia/Kolkata")
+
+
+async def _run_calls_for_all_panchayats(call_type: str):
+    # call_type: "morning" | "evening"
+    panchayats = await db.panchayats.find({}, {"_id": 1, "name": 1, "email": 1, "lat": 1, "lon": 1}).to_list(100000)
+    for p in panchayats:
+        setup = await _get_retell_setup(p["_id"])
+        if not setup:
+            continue
+
+        # Ensure we have routes for today; if not, attempt to run optimization for today.
+        # Note: Optimization endpoint currently generates routes for tomorrow. We keep this simple:
+        # if no routes for today, we will reuse today's date and store using routes collection directly.
+        today = _date_ist().isoformat()
+        routes_today = await db.routes.find({"panchayat_id": p["_id"], "plan_date": today}).to_list(1)
+        if not routes_today:
+            # attempt to generate plan for today using current logs (best effort)
+            wards = await db.wards.find({"panchayat_id": p["_id"]}).to_list(10000)
+            vehicles = await db.vehicles.find({"panchayat_id": p["_id"]}).to_list(10000)
+            if wards and vehicles:
+                preds = await train_and_predict_next_day(p["_id"], datetime.fromisoformat(today).date())
+                await db.routes.delete_many({"panchayat_id": p["_id"], "plan_date": today})
+                plans = allocate_vehicles(p, wards, vehicles, preds)
+                now_iso = _iso(_now_utc())
+                docs = []
+                for pl in plans:
+                    docs.append({"_id": _uuid(), "panchayat_id": p["_id"], "plan_date": today, **pl, "created_at": now_iso})
+                if docs:
+                    await db.routes.insert_many(docs)
+
+        # Trigger calls
+        # Build faux dependency context for reuse: call internal logic directly
+        if call_type == "morning":
+            try:
+                await retell_run_morning_calls(p=p)  # type: ignore
+            except Exception:
+                continue
+        else:
+            try:
+                await retell_run_evening_calls(p=p)  # type: ignore
+            except Exception:
+                continue
+
+
+def _schedule_jobs():
+    # Runs every minute and checks exact HH:MM match from settings.
+    # This is simple and robust in a container (no OS cron).
+
+    async def _tick():
+        now_ist = datetime.now(ZoneInfo("Asia/Kolkata"))
+        hhmm = now_ist.strftime("%H:%M")
+
+        settings_docs = await db.settings.find({}, {"_id": 0, "panchayat_id": 1, "morning_call_time_ist": 1, "evening_call_time_ist": 1}).to_list(100000)
+        # Build sets for quick check
+        morning_ids = [d["panchayat_id"] for d in settings_docs if d.get("morning_call_time_ist") == hhmm]
+        evening_ids = [d["panchayat_id"] for d in settings_docs if d.get("evening_call_time_ist") == hhmm]
+
+        # If no settings row exists for a panchayat, default is 06:00/19:00.
+        if hhmm in ("06:00", "19:00"):
+            existing_ids = {d.get("panchayat_id") for d in settings_docs}
+            all_panchayats = await db.panchayats.find({}, {"_id": 1}).to_list(100000)
+            for p in all_panchayats:
+                if p["_id"] in existing_ids:
+                    continue
+                if hhmm == "06:00":
+                    morning_ids.append(p["_id"])
+                if hhmm == "19:00":
+                    evening_ids.append(p["_id"])
+
+        # Run calls for those panchayats
+        if morning_ids:
+            for pid in morning_ids:
+                p = await db.panchayats.find_one({"_id": pid}, {"_id": 1, "name": 1, "email": 1, "lat": 1, "lon": 1})
+                if not p:
+                    continue
+                try:
+                    await retell_run_morning_calls(p=p)  # type: ignore
+                except Exception:
+                    continue
+
+        if evening_ids:
+            for pid in evening_ids:
+                p = await db.panchayats.find_one({"_id": pid}, {"_id": 1, "name": 1, "email": 1, "lat": 1, "lon": 1})
+                if not p:
+                    continue
+                try:
+                    await retell_run_evening_calls(p=p)  # type: ignore
+                except Exception:
+                    continue
+
+    _scheduler.add_job(lambda: anyio.run(_tick), trigger="interval", minutes=1, id="tick", replace_existing=True)
+
+
+@app.on_event("startup")
+async def _startup_scheduler():
+    _schedule_jobs()
+    _scheduler.start()
+
+
     if not setup:
         raise HTTPException(status_code=400, detail="Retell setup missing. Configure agent IDs first.")
 
