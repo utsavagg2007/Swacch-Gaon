@@ -77,6 +77,9 @@ export default function Login() {
                     className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-100"
                   >
                     {error}
+                    <div className="mt-1 text-xs text-rose-100/80" data-testid="login-error-hint">
+                      If you just created an account, please make sure you used the same email/password.
+                    </div>
                   </div>
                 ) : null}
 
