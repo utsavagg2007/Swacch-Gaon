@@ -196,7 +196,7 @@ class WasteManagementAPITester:
         )
         
         if success and isinstance(response, list):
-            self.vehicle_ids = [vehicle['id'] for vehicle in response]
+            self.vehicle_ids = [vehicle.get('id') or vehicle.get('_id') for vehicle in response]
             print(f"   Created {len(self.vehicle_ids)} vehicles")
             return True
         return False
