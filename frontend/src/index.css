@@ -1,6 +1,7 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* Ensure Tailwind v4 scans our source files for class names */
+@source "./**/*.{js,jsx,ts,tsx}";
 
 /* Tailwind v4 + CRA: keep global CSS minimal (avoid @apply on theme utilities). */
 
