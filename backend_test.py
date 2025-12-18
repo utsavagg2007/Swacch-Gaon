@@ -356,12 +356,12 @@ class WasteManagementAPITester:
             print("❌ Skipping Retell evening payload - no token")
             return False
             
-        # This should return 404 if no routes exist
+        # This should return 200 with payload data if routes exist
         success, response = self.run_test(
             "Retell Evening Payload",
             "GET",
             "retell/evening/payload", 
-            404  # Expecting 404 initially
+            200  # Expecting 200 with data after optimization
         )
         
         return success
