@@ -17,7 +17,7 @@ export default function AppShell({ variant = "public", children }) {
   };
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(1200px_circle_at_10%_10%,rgba(16,185,129,0.18),transparent_55%),radial-gradient(900px_circle_at_80%_30%,rgba(14,165,233,0.16),transparent_45%),linear-gradient(to_bottom,#070A0D,#0B1020)] text-zinc-50">
+    <div className="min-h-screen bg-[radial-gradient(1200px_circle_at_10%_10%,rgba(16,185,129,0.18),transparent_55%),radial-gradient(900px_circle_at_80%_30%,rgba(14,165,233,0.16),transparent_45%),linear-gradient(to_bottom,#070A0D,#0B1020)] text-zinc-50" style={{ minHeight: "100vh" }}>
       <div className="sticky top-0 z-40 border-b border-white/10 bg-black/30 backdrop-blur supports-[backdrop-filter]:bg-black/20">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <Link
