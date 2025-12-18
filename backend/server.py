@@ -1008,6 +1008,47 @@ async def retell_set_setup(payload: RetellSetupIn, p=Depends(get_current_panchay
 )
 async def retell_run_morning_calls(p=Depends(get_current_panchayat)):
     setup = await _get_retell_setup(p["_id"])
+    if not setup:
+        raise HTTPException(status_code=400, detail="Retell setup missing. Configure agent IDs first.")
+
+    data = await retell_morning_payload(date=_date_ist().isoformat(), p=p)
+    drivers = data.get("drivers", [])
+
+    results = []
+    calls_started = 0
+    for d in drivers:
+        to_phone = d.get("to_phone")
+        if not to_phone:
+            results.append({"ok": False, "reason": "Missing driver phone", "driver": d})
+            continue
+
+        meta = {
+            "type": "morning_route",
+            "panchayat_id": p["_id"],
+            "panchayat_name": p.get("name"),
+            "plan_date": d.get("plan_date"),
+            "vehicle_number": d.get("vehicle_number"),
+            "driver_phone": to_phone,
+            "round_trips": d.get("round_trips"),
+            "route_text": d.get("route"),
+        }
+
+        try:
+            resp = await _to_thread(
+                create_phone_call,
+                agent_id=setup["morning_agent_id"],
+                to_number=to_phone,
+                from_number=setup.get("from_number"),
+                webhook_url=_webhook_url(),
+                metadata=meta,
+                data_retention="everything_except_pii",
+            )
+            calls_started += 1
+            results.append({"ok": True, "retell": resp, "driver": d})
+        except RetellError as e:
+            results.append({"ok": False, "reason": str(e), "driver": d})
+
+    return RetellCallResultOut(ok=True, calls_started=calls_started, results=results)
 
 
 # --- Scheduler bootstrap ---
