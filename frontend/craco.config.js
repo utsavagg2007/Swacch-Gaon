@@ -43,9 +43,10 @@ const webpackConfig = {
       },
     },
   },
+  // CRACO v7 doesn't expose POSTCSS_MODES; use postcss.config.js file directly.
   style: {
     postcss: {
-      mode: POSTCSS_MODES.file,
+      plugins: [require("@tailwindcss/postcss")(), require("autoprefixer")],
     },
   },
   webpack: {
