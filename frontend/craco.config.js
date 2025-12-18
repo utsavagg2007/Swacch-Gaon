@@ -1,5 +1,6 @@
 // craco.config.js
 const path = require("path");
+const { POSTCSS_MODES } = require("@craco/craco");
 require("dotenv").config();
 
 // Check if we're in development/preview mode (not production build)
@@ -44,7 +45,7 @@ const webpackConfig = {
   },
   style: {
     postcss: {
-      plugins: [require("@tailwindcss/postcss")(), require("autoprefixer")],
+      mode: POSTCSS_MODES.file,
     },
   },
   webpack: {
