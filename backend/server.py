@@ -372,13 +372,33 @@ def allocate_vehicles(
     vehicles: List[dict],
     ward_predictions: Dict[str, float],
 ) -> List[dict]:
-    # prepare
+    """Allocate wards across ALL available vehicles.
+
+    Priority:
+    1) Use all drivers/vehicles (assign at least one ward per vehicle when possible)
+    2) Then minimize additional round trips and unused capacity.
+
+    Note: If prediction is missing (no logs yet), we use a small default demand so
+    routing still works.
+    """
+
+    center_lat = float(panchayat_center.get("lat") or 0.0)
+    center_lon = float(panchayat_center.get("lon") or 0.0)
+
+    prepared_wards = []
     for w in wards:
-        w["predicted_waste"] = float(ward_predictions.get(w["_id"], 0.0))
-    wards_sorted = sorted(
-        wards,
-        key=lambda w: haversine_km(panchayat_center.get("lat") or 0.0, panchayat_center.get("lon") or 0.0, w.get("lat") or 0.0, w.get("lon") or 0.0),
-    )
+        pred = ward_predictions.get(w["_id"], None)
+        demand = float(pred) if pred is not None else 1.0
+        demand = max(0.0, demand)
+        prepared_wards.append(
+            {
+                **w,
+                "predicted_waste": demand,
+                "dist": haversine_km(center_lat, center_lon, w.get("lat") or 0.0, w.get("lon") or 0.0),
+            }
+        )
+
+    wards_sorted = sorted(prepared_wards, key=lambda w: w["dist"])
 
     vehicle_states = [
         {
@@ -389,18 +409,64 @@ def allocate_vehicles(
         for v in vehicles
     ]
 
-    # greedy pack: iterate wards, assign to vehicle with most remaining (per trip) first
-    for w in wards_sorted:
-        demand = float(w["predicted_waste"])
-        if demand <= 0:
-            continue
+    if not vehicle_states:
+        return []
 
-        # choose vehicle with max capacity
-        vehicle_states.sort(key=lambda v: float(v.get("capacity", 0)), reverse=True)
-        chosen = vehicle_states[0] if vehicle_states else None
-        if not chosen:
+    # 1) Seed: give each vehicle at least one ward (if enough wards)
+    remaining = wards_sorted.copy()
+    for v in vehicle_states:
+        if not remaining:
             break
+        w = remaining.pop(0)
+        v["assigned"].append(
+            {
+                "ward_id": w["_id"],
+                "ward_name": w["name"],
+                "lat": w.get("lat"),
+                "lon": w.get("lon"),
+                "predicted_waste": float(w["predicted_waste"]),
+            }
+        )
+        v["assigned_total"] += float(w["predicted_waste"])
 
+    # helper cost
+    def _round_trips(load: float, cap: float) -> int:
+        if load <= 0:
+            return 0
+        return int(np.ceil(load / cap))
+
+    # 2) Distribute remaining wards by minimizing extra trips and unused capacity
+    for w in remaining:
+        demand = float(w["predicted_waste"])
+
+        best_idx = None
+        best_cost = None
+
+        for idx, v in enumerate(vehicle_states):
+            cap = float(v.get("capacity") or 1.0)
+            cur_load = float(v.get("assigned_total") or 0.0)
+            cur_trips = _round_trips(cur_load, cap)
+
+            new_load = cur_load + demand
+            new_trips = _round_trips(new_load, cap)
+
+            inc_trips = new_trips - cur_trips
+            unused = (new_trips * cap) - new_load if new_trips > 0 else cap
+
+            # Lower is better: prioritize no extra trips, then lower unused capacity, then lower total trips,
+            # then keep loads balanced
+            cost = (
+                inc_trips,
+                unused,
+                new_trips,
+                new_load / cap,
+            )
+
+            if best_cost is None or cost < best_cost:
+                best_cost = cost
+                best_idx = idx
+
+        chosen = vehicle_states[best_idx] if best_idx is not None else vehicle_states[0]
         chosen["assigned"].append(
             {
                 "ward_id": w["_id"],
@@ -412,25 +478,27 @@ def allocate_vehicles(
         )
         chosen["assigned_total"] += demand
 
+    # 3) Build a plan for every vehicle (even if it has 0 wards)
     plans = []
     for v in vehicle_states:
-        if not v["assigned"]:
-            continue
-        cap = float(v["capacity"])
-        total = float(v["assigned_total"])
-        round_trips = int(max(1, np.ceil(total / cap)))
-        order = nearest_neighbor_route(panchayat_center.get("lat") or 0.0, panchayat_center.get("lon") or 0.0, v["assigned"]) 
+        cap = float(v.get("capacity") or 1.0)
+        total = float(v.get("assigned_total") or 0.0)
+        round_trips = _round_trips(total, cap)
+        assigned = v.get("assigned", [])
+        order = nearest_neighbor_route(center_lat, center_lon, assigned) if assigned else []
+
         plans.append(
             {
                 "vehicle_id": v["_id"],
-                "vehicle_number": v["vehicle_number"],
-                "driver_phone": v["driver_phone"],
-                "round_trips": round_trips,
-                "wards": v["assigned"],
-                "predicted_total": total,
+                "vehicle_number": v.get("vehicle_number"),
+                "driver_phone": v.get("driver_phone"),
+                "round_trips": int(round_trips),
+                "wards": assigned,
+                "predicted_total": float(total),
                 "route_order": order,
             }
         )
+
     return plans
 
 
