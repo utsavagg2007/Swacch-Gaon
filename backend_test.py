@@ -143,7 +143,7 @@ class WasteManagementAPITester:
         )
         
         if success and isinstance(response, list):
-            self.ward_ids = [ward['id'] for ward in response]
+            self.ward_ids = [ward.get('id') or ward.get('_id') for ward in response]
             print(f"   Created {len(self.ward_ids)} wards")
             return True
         return False
