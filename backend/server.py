@@ -1091,6 +1091,10 @@ async def _run_calls_for_all_panchayats(call_type: str):
         if not setup:
             continue
 
+        from_number = (setup.get("from_number") or os.environ.get("RETELL_FROM_NUMBER") or "").strip()
+        if not from_number:
+            continue
+
         # Ensure we have routes for today; if not, attempt to run optimization for today.
         # Note: Optimization endpoint currently generates routes for tomorrow. We keep this simple:
         # if no routes for today, we will reuse today's date and store using routes collection directly.
