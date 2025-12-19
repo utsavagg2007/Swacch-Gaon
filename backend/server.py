@@ -107,6 +107,14 @@ def verify_password(pw: str, pw_hash: str) -> bool:
     except Exception:
         return False
 
+async def _webhook_url_for_scheduler() -> str:
+    base = (os.environ.get("PUBLIC_BACKEND_URL") or "").strip()
+    if not base:
+        raise RuntimeError("PUBLIC_BACKEND_URL not configured for scheduler")
+    return f"{base}/api/retell/webhook/call-event"
+
+
+
 
 def create_access_token(panchayat_id: str) -> str:
     exp = _now_utc() + timedelta(minutes=TOKEN_TTL_MIN)
