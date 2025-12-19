@@ -1194,10 +1194,8 @@ def _schedule_jobs():
                 p = await db.panchayats.find_one({"_id": pid}, {"_id": 1, "name": 1, "email": 1, "lat": 1, "lon": 1})
                 if not p:
                     continue
-                try:
-                    await retell_run_morning_calls(p=p)  # type: ignore
-                except Exception:
-                    continue
+                # Scheduler uses internal logic above; nothing to do here.
+                continue
 
         if evening_ids:
             for pid in evening_ids:
