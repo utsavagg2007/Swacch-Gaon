@@ -1026,6 +1026,13 @@ async def retell_run_morning_calls(request: Request, p=Depends(get_current_panch
     if not setup:
         raise HTTPException(status_code=400, detail="Retell setup missing. Configure agent IDs first.")
 
+    from_number = (setup.get("from_number") or os.environ.get("RETELL_FROM_NUMBER") or "").strip()
+    if not from_number:
+        raise HTTPException(
+            status_code=400,
+            detail="Retell outbound calls require a from_number. Add it in Dashboard → Retell AI Setup (E.164 like +91...) or set RETELL_FROM_NUMBER in backend env.",
+        )
+
     today = _date_ist().isoformat()
     # Ensure routes exist for today; if not, generate them now.
     existing = await db.routes.find_one({"panchayat_id": p["_id"], "plan_date": today}, {"_id": 1})
@@ -1236,6 +1243,13 @@ async def retell_run_evening_calls(request: Request, p=Depends(get_current_panch
     setup = await _get_retell_setup(p["_id"])
     if not setup:
         raise HTTPException(status_code=400, detail="Retell setup missing. Configure agent IDs first.")
+
+    from_number = (setup.get("from_number") or os.environ.get("RETELL_FROM_NUMBER") or "").strip()
+    if not from_number:
+        raise HTTPException(
+            status_code=400,
+            detail="Retell outbound calls require a from_number. Add it in Dashboard → Retell AI Setup (E.164 like +91...) or set RETELL_FROM_NUMBER in backend env.",
+        )
 
     today = _date_ist().isoformat()
     existing = await db.routes.find_one({"panchayat_id": p["_id"], "plan_date": today}, {"_id": 1})
