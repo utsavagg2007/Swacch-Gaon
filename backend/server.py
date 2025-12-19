@@ -1,4 +1,6 @@
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, status
+from fastapi import Request
+
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
