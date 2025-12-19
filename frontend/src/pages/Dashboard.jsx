@@ -65,6 +65,7 @@ export default function Dashboard() {
   const [retellSetup, setRetellSetup] = useState({ morning_agent_id: "", evening_agent_id: "", from_number: "" });
   const [busyRetell, setBusyRetell] = useState(false);
   const [busyCalls, setBusyCalls] = useState(false);
+  const [retellError, setRetellError] = useState("");
 
   const [busyLog, setBusyLog] = useState(false);
   const [busyOpt, setBusyOpt] = useState(false);
@@ -136,6 +137,7 @@ export default function Dashboard() {
   const onSaveRetell = async () => {
     setBusyRetell(true);
     setError("");
+    setRetellError("");
     try {
       const payload = {
         morning_agent_id: retellSetup.morning_agent_id,
@@ -149,7 +151,7 @@ export default function Dashboard() {
         from_number: res.data.from_number || "",
       });
     } catch (err) {
-      setError(err?.response?.data?.detail || "Could not save Retell setup");
+      setRetellError(err?.response?.data?.detail || "Could not save Retell setup");
     } finally {
       setBusyRetell(false);
     }
@@ -158,11 +160,12 @@ export default function Dashboard() {
   const onRunCallsNow = async (type) => {
     setBusyCalls(true);
     setError("");
+    setRetellError("");
     try {
       const path = type === "morning" ? "/retell/calls/morning/run" : "/retell/calls/evening/run";
       await api.post(path);
     } catch (err) {
-      setError(err?.response?.data?.detail || "Could not start calls");
+      setRetellError(err?.response?.data?.detail || "Could not start calls");
     } finally {
       setBusyCalls(false);
     }
@@ -364,19 +367,20 @@ export default function Dashboard() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label data-testid="dashboard-retell-from-number-label">From number (optional, E.164)</Label>
+                    <Label data-testid="dashboard-retell-from-number-label">From number (required, E.164)</Label>
                     <Input
                       value={retellSetup.from_number}
                       onChange={(e) => setRetellSetup((s) => ({ ...s, from_number: e.target.value }))}
                       data-testid="dashboard-retell-from-number-input"
                       className="border-white/15 bg-black/20 text-zinc-50"
                       placeholder="+91..."
+                      required
                     />
                   </div>
 
                   <Button
                     onClick={onSaveRetell}
-                    disabled={busyRetell || !retellSetup.morning_agent_id || !retellSetup.evening_agent_id}
+                    disabled={busyRetell || !retellSetup.morning_agent_id || !retellSetup.evening_agent_id || !retellSetup.from_number}
                     data-testid="dashboard-retell-save-button"
                     className="w-full rounded-full bg-white/10 text-zinc-50 ring-1 ring-white/10 hover:bg-white/15"
                   >
@@ -386,7 +390,7 @@ export default function Dashboard() {
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <Button
                       onClick={() => onRunCallsNow("morning")}
-                      disabled={busyCalls}
+                      disabled={busyCalls || !retellSetup.from_number || !retellSetup.morning_agent_id}
                       data-testid="dashboard-retell-run-morning-button"
                       className="rounded-full bg-emerald-400/20 text-emerald-100 ring-1 ring-emerald-200/25 hover:bg-emerald-400/25"
                     >
@@ -394,7 +398,7 @@ export default function Dashboard() {
                     </Button>
                     <Button
                       onClick={() => onRunCallsNow("evening")}
-                      disabled={busyCalls}
+                      disabled={busyCalls || !retellSetup.from_number || !retellSetup.evening_agent_id}
                       data-testid="dashboard-retell-run-evening-button"
                       className="rounded-full bg-violet-400/15 text-violet-100 ring-1 ring-violet-200/20 hover:bg-violet-400/20"
                     >
@@ -402,8 +406,18 @@ export default function Dashboard() {
                     </Button>
                   </div>
 
+                  {retellError ? (
+                    <div
+                      data-testid="dashboard-retell-error"
+                      className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-100"
+                    >
+                      {retellError}
+                    </div>
+                  ) : null}
+
                   <div data-testid="dashboard-retell-hint" className="text-xs text-zinc-200/70">
-                    Requirement: backend must have PUBLIC_BACKEND_URL set so Retell can reach the webhook.
+                    From number is required by Retell for outbound calls (must be a Retell-approved caller ID).
+                    Scheduled calls also require PUBLIC_BACKEND_URL for webhook reachability.
                   </div>
                 </CardContent>
               </Card>
