@@ -1280,10 +1280,21 @@ async def _get_retell_setup(panchayat_id: str) -> Optional[dict]:
 
 
 def _webhook_url() -> str:
-    # We rely on externally reachable base URL (set via env in production)
+    """Return the publicly reachable webhook URL for Retell.
+
+    IMPORTANT:
+    - For Retell to reach our webhook, we need a publicly reachable base URL.
+    - If PUBLIC_BACKEND_URL is not configured, we fallback to REACT_APP_BACKEND_URL.
+      In Emergent preview environments this is typically already the correct public URL.
+    """
+
     base = os.environ.get("PUBLIC_BACKEND_URL")
     if not base:
+        base = os.environ.get("REACT_APP_BACKEND_URL")
+
+    if not base:
         raise HTTPException(status_code=500, detail="PUBLIC_BACKEND_URL not configured")
+
     return f"{base}/api/retell/webhook/call-event"
 
 
