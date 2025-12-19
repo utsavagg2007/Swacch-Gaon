@@ -1007,7 +1007,7 @@ async def retell_set_setup(payload: RetellSetupIn, p=Depends(get_current_panchay
     response_model_by_alias=False,
     tags=["retell"],
 )
-async def retell_run_morning_calls(p=Depends(get_current_panchayat)):
+async def retell_run_morning_calls(request: Request, p=Depends(get_current_panchayat)):
     setup = await _get_retell_setup(p["_id"])
     if not setup:
         raise HTTPException(status_code=400, detail="Retell setup missing. Configure agent IDs first.")
@@ -1040,7 +1040,7 @@ async def retell_run_morning_calls(p=Depends(get_current_panchayat)):
                 agent_id=setup["morning_agent_id"],
                 to_number=to_phone,
                 from_number=setup.get("from_number"),
-                webhook_url=_webhook_url(),
+                webhook_url=_webhook_url(request),
                 metadata=meta,
                 data_retention="everything_except_pii",
             )
@@ -1159,7 +1159,7 @@ async def _startup_scheduler():
     response_model_by_alias=False,
     tags=["retell"],
 )
-async def retell_run_evening_calls(p=Depends(get_current_panchayat)):
+async def retell_run_evening_calls(request: Request, p=Depends(get_current_panchayat)):
     setup = await _get_retell_setup(p["_id"])
     if not setup:
         raise HTTPException(status_code=400, detail="Retell setup missing. Configure agent IDs first.")
@@ -1191,7 +1191,7 @@ async def retell_run_evening_calls(p=Depends(get_current_panchayat)):
                 agent_id=setup["evening_agent_id"],
                 to_number=to_phone,
                 from_number=setup.get("from_number"),
-                webhook_url=_webhook_url(),
+                webhook_url=_webhook_url(request),
                 metadata=meta,
                 data_retention="everything_except_pii",
             )
@@ -1281,32 +1281,16 @@ async def _get_retell_setup(panchayat_id: str) -> Optional[dict]:
     return await db.retell_settings.find_one({"panchayat_id": panchayat_id}, {"_id": 0})
 
 
-def _webhook_url() -> str:
+def _webhook_url(request: Request) -> str:
     """Return the publicly reachable webhook URL for Retell.
 
-    IMPORTANT:
-    - For Retell to reach our webhook, we need a publicly reachable base URL.
-    - If PUBLIC_BACKEND_URL is not configured, we fallback to REACT_APP_BACKEND_URL.
-      In Emergent preview environments this is typically already the correct public URL.
+    - For manual (dashboard) triggers, we can derive the base from the current request host.
+    - For auto-scheduled calls (no request context), you must set PUBLIC_BACKEND_URL.
     """
 
-    base = os.environ.get("PUBLIC_BACKEND_URL")
-    if base:
-        base = base.strip()
-
-    # Fallback for Emergent preview env: derive from current request host.
-    # This avoids requiring manual env configuration during development.
+    base = (os.environ.get("PUBLIC_BACKEND_URL") or "").strip()
     if not base:
-        try:
-            from fastapi import Request
-
-            # This function is used inside request handlers, so a Request is available via context.
-            # But we can't import it here; we will set base in call endpoints when needed.
-        except Exception:
-            pass
-
-    if not base:
-        raise HTTPException(status_code=500, detail="PUBLIC_BACKEND_URL not configured")
+        base = f"{request.url.scheme}://{request.url.netloc}"
 
     return f"{base}/api/retell/webhook/call-event"
 
