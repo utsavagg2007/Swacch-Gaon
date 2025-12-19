@@ -1026,7 +1026,13 @@ async def retell_run_morning_calls(request: Request, p=Depends(get_current_panch
     if not setup:
         raise HTTPException(status_code=400, detail="Retell setup missing. Configure agent IDs first.")
 
-    data = await retell_morning_payload(date=_date_ist().isoformat(), p=p)
+    today = _date_ist().isoformat()
+    # Ensure routes exist for today; if not, generate them now.
+    existing = await db.routes.find_one({"panchayat_id": p["_id"], "plan_date": today}, {"_id": 1})
+    if not existing:
+        await run_optimization(for_date=today, p=p)
+
+    data = await retell_morning_payload(date=today, p=p)
     drivers = data.get("drivers", [])
 
     results = []
