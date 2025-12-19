@@ -1111,6 +1111,10 @@ def _schedule_jobs():
     # This is simple and robust in a container (no OS cron).
 
     async def _tick():
+        # Scheduler runs without request context; requires PUBLIC_BACKEND_URL.
+        if not (os.environ.get("PUBLIC_BACKEND_URL") or "").strip():
+            return
+
         now_ist = datetime.now(ZoneInfo("Asia/Kolkata"))
         hhmm = now_ist.strftime("%H:%M")
 
