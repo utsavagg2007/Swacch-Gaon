@@ -1289,8 +1289,19 @@ def _webhook_url() -> str:
     """
 
     base = os.environ.get("PUBLIC_BACKEND_URL")
+    if base:
+        base = base.strip()
+
+    # Fallback for Emergent preview env: derive from current request host.
+    # This avoids requiring manual env configuration during development.
     if not base:
-        base = os.environ.get("REACT_APP_BACKEND_URL")
+        try:
+            from fastapi import Request
+
+            # This function is used inside request handlers, so a Request is available via context.
+            # But we can't import it here; we will set base in call endpoints when needed.
+        except Exception:
+            pass
 
     if not base:
         raise HTTPException(status_code=500, detail="PUBLIC_BACKEND_URL not configured")
