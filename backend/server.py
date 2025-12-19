@@ -1093,17 +1093,70 @@ async def _run_calls_for_all_panchayats(call_type: str):
                     await db.routes.insert_many(docs)
 
         # Trigger calls
-        # Build faux dependency context for reuse: call internal logic directly
+        # Scheduler has no request context; require PUBLIC_BACKEND_URL.
+        # For MVP we skip scheduled execution when PUBLIC_BACKEND_URL is not set.
+        if not (os.environ.get("PUBLIC_BACKEND_URL") or "").strip():
+            continue
+
+        # Create calls directly without depending on FastAPI request injection
+        today = _date_ist().isoformat()
         if call_type == "morning":
-            try:
-                await retell_run_morning_calls(p=p)  # type: ignore
-            except Exception:
-                continue
+            data = await retell_morning_payload(date=today, p=p)
+            drivers = data.get("drivers", [])
+            for d in drivers:
+                to_phone = d.get("to_phone")
+                if not to_phone:
+                    continue
+                meta = {
+                    "type": "morning_route",
+                    "panchayat_id": p["_id"],
+                    "panchayat_name": p.get("name"),
+                    "plan_date": d.get("plan_date"),
+                    "vehicle_number": d.get("vehicle_number"),
+                    "driver_phone": to_phone,
+                    "round_trips": d.get("round_trips"),
+                    "route_text": d.get("route"),
+                }
+                try:
+                    await _to_thread(
+                        create_phone_call,
+                        agent_id=setup["morning_agent_id"],
+                        to_number=to_phone,
+                        from_number=setup.get("from_number"),
+                        webhook_url=await _webhook_url_for_scheduler(),
+                        metadata=meta,
+                        data_retention="everything_except_pii",
+                    )
+                except Exception:
+                    continue
         else:
-            try:
-                await retell_run_evening_calls(p=p)  # type: ignore
-            except Exception:
-                continue
+            data = await retell_evening_payload(date=today, p=p)
+            drivers = data.get("drivers", [])
+            for d in drivers:
+                to_phone = d.get("to_phone")
+                if not to_phone:
+                    continue
+                meta = {
+                    "type": "evening_logs",
+                    "panchayat_id": p["_id"],
+                    "panchayat_name": p.get("name"),
+                    "date": d.get("plan_date"),
+                    "vehicle_number": d.get("vehicle_number"),
+                    "driver_phone": to_phone,
+                    "wards_expected": d.get("wards_expected"),
+                }
+                try:
+                    await _to_thread(
+                        create_phone_call,
+                        agent_id=setup["evening_agent_id"],
+                        to_number=to_phone,
+                        from_number=setup.get("from_number"),
+                        webhook_url=await _webhook_url_for_scheduler(),
+                        metadata=meta,
+                        data_retention="everything_except_pii",
+                    )
+                except Exception:
+                    continue
 
 
 def _schedule_jobs():
