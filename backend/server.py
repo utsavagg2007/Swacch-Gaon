@@ -1457,7 +1457,7 @@ async def retell_evening_webhook(payload: RetellEveningWebhookIn):
                         {
                             "_id": _uuid(),
                             "panchayat_id": pid,
-                            "plan_date": target.isoformat(),
+                            "plan_date": tomorrow.isoformat(),
                             **pl,
                             "created_at": now_iso,
                         }
