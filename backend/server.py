@@ -880,9 +880,15 @@ async def set_call_schedule(payload: CallScheduleIn, p=Depends(get_current_panch
     response_model_by_alias=False,
     tags=["optimization"],
 )
-async def run_optimization(p=Depends(get_current_panchayat)):
-    # predict for next day IST
-    tomorrow = _date_ist() + timedelta(days=1)
+async def run_optimization(for_date: Optional[str] = None, p=Depends(get_current_panchayat)):
+    # predict for provided date (YYYY-MM-DD) else next day IST
+    if for_date:
+        try:
+            target = datetime.fromisoformat(for_date).date()
+        except Exception:
+            raise HTTPException(status_code=400, detail="for_date must be YYYY-MM-DD")
+    else:
+        target = _date_ist() + timedelta(days=1)
 
     wards = await db.wards.find({"panchayat_id": p["_id"]}).to_list(10000)
     vehicles = await db.vehicles.find({"panchayat_id": p["_id"]}).to_list(10000)
@@ -890,10 +896,10 @@ async def run_optimization(p=Depends(get_current_panchayat)):
     if not wards or not vehicles:
         raise HTTPException(status_code=400, detail="Please add wards and vehicles first")
 
-    ward_preds = await train_and_predict_next_day(p["_id"], tomorrow)
+    ward_preds = await train_and_predict_next_day(p["_id"], target)
 
     # clear existing plans for that date
-    await db.routes.delete_many({"panchayat_id": p["_id"], "plan_date": tomorrow.isoformat()})
+    await db.routes.delete_many({"panchayat_id": p["_id"], "plan_date": target.isoformat()})
 
     plans = allocate_vehicles(p, wards, vehicles, ward_preds)
     now_iso = _iso(_now_utc())
@@ -904,7 +910,7 @@ async def run_optimization(p=Depends(get_current_panchayat)):
             {
                 "_id": _uuid(),
                 "panchayat_id": p["_id"],
-                "plan_date": tomorrow.isoformat(),
+                "plan_date": target.isoformat(),
                 **pl,
                 "created_at": now_iso,
             }
@@ -913,7 +919,7 @@ async def run_optimization(p=Depends(get_current_panchayat)):
     if route_docs:
         await db.routes.insert_many(route_docs)
 
-    return OptimizationRunOut(plan_date=tomorrow.isoformat(), routes_created=len(route_docs))
+    return OptimizationRunOut(plan_date=target.isoformat(), routes_created=len(route_docs))
 
 
 @api_router.get(
@@ -1440,7 +1446,7 @@ async def retell_evening_webhook(payload: RetellEveningWebhookIn):
                         {
                             "_id": _uuid(),
                             "panchayat_id": pid,
-                            "plan_date": tomorrow.isoformat(),
+                            "plan_date": target.isoformat(),
                             **pl,
                             "created_at": now_iso,
                         }
