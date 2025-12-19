@@ -4,7 +4,13 @@ import requests
 
 
 RETELL_API_BASE = os.environ.get("RETELL_API_BASE", "https://api.retellai.com")
-RETELL_API_KEY = os.environ.get("RETELL_API_KEY")
+
+
+def _api_key() -> str:
+    key = os.environ.get("RETELL_API_KEY")
+    if not key:
+        raise RetellError("RETELL_API_KEY is not configured")
+    return key
 
 
 class RetellError(Exception):
