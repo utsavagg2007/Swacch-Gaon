@@ -284,6 +284,12 @@ class RoutePlanOut(BaseModel):
 class RetellEveningWebhookIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
+    vehicle_number: str
+    driver_phone: Optional[str] = None
+    date: str  # YYYY-MM-DD
+    total_waste_collected: float = Field(gt=0)
+    wards_visited: List[str]  # ward_id or ward_name
+    final: bool = True
 
 
 class RetellSetupIn(BaseModel):
@@ -301,17 +307,11 @@ class RetellSetupOut(BaseModel):
 
 
 class RetellCallResultOut(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     ok: bool
     calls_started: int
     results: List[Dict[str, Any]]
-
-
-    vehicle_number: str
-    driver_phone: Optional[str] = None
-    date: str  # YYYY-MM-DD
-    total_waste_collected: float = Field(gt=0)
-    wards_visited: List[str]  # ward_id or ward_name
-    final: bool = True
 
 
 # --- ML / optimization helpers ---
