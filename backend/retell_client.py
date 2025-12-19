@@ -18,10 +18,9 @@ class RetellError(Exception):
 
 
 def _headers() -> Dict[str, str]:
-    if not RETELL_API_KEY:
-        raise RetellError("RETELL_API_KEY is not configured")
+    key = _api_key()
     return {
-        "Authorization": f"Bearer {RETELL_API_KEY}",
+        "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
     }
 
