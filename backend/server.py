@@ -542,6 +542,11 @@ def allocate_vehicles(
 
 # --- App / Router ---
 app = FastAPI()
+
+# Root health route so "/" does not return 404
+@app.get("/")
+async def root_health():
+    return {"status": "ok", "service": "Swacch Gaon Backend"}
 api_router = APIRouter(prefix="/api")
 
 
@@ -1187,46 +1192,25 @@ def _schedule_jobs():
     # This is simple and robust in a container (no OS cron).
 
     async def _tick():
-        # Scheduler runs without request context; requires PUBLIC_BACKEND_URL.
         if not (os.environ.get("PUBLIC_BACKEND_URL") or "").strip():
             return
 
         now_ist = datetime.now(ZoneInfo("Asia/Kolkata"))
         hhmm = now_ist.strftime("%H:%M")
 
-        settings_docs = await db.settings.find({}, {"_id": 0, "panchayat_id": 1, "morning_call_time_ist": 1, "evening_call_time_ist": 1}).to_list(100000)
-        # Build sets for quick check
+        settings_docs = await db.settings.find(
+            {},
+            {"_id": 0, "panchayat_id": 1, "morning_call_time_ist": 1, "evening_call_time_ist": 1},
+        ).to_list(100000)
+
         morning_ids = [d["panchayat_id"] for d in settings_docs if d.get("morning_call_time_ist") == hhmm]
         evening_ids = [d["panchayat_id"] for d in settings_docs if d.get("evening_call_time_ist") == hhmm]
 
-        # If no settings row exists for a panchayat, default is 06:00/19:00.
-        if hhmm in ("06:00", "19:00"):
-            existing_ids = {d.get("panchayat_id") for d in settings_docs}
-            all_panchayats = await db.panchayats.find({}, {"_id": 1}).to_list(100000)
-            for p in all_panchayats:
-                if p["_id"] in existing_ids:
-                    continue
-                if hhmm == "06:00":
-                    morning_ids.append(p["_id"])
-                if hhmm == "19:00":
-                    evening_ids.append(p["_id"])
+        if hhmm == "06:00":
+            await _run_calls_for_all_panchayats("morning")
 
-        # Run calls for those panchayats
-        if morning_ids:
-            for pid in morning_ids:
-                p = await db.panchayats.find_one({"_id": pid}, {"_id": 1, "name": 1, "email": 1, "lat": 1, "lon": 1})
-                if not p:
-                    continue
-                # Scheduler uses internal logic above; nothing to do here.
-                continue
-
-        if evening_ids:
-            for pid in evening_ids:
-                p = await db.panchayats.find_one({"_id": pid}, {"_id": 1, "name": 1, "email": 1, "lat": 1, "lon": 1})
-                if not p:
-                    continue
-                # Scheduler uses internal logic above; nothing to do here.
-                continue
+        if hhmm == "19:00":
+            await _run_calls_for_all_panchayats("evening")
 
     _scheduler.add_job(_tick, trigger="interval", minutes=1, id="tick", replace_existing=True)
 
